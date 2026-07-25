@@ -94,6 +94,10 @@ class AssignmentMaster:
     def solve(self, deadline: Deadline, time_cap: float = 10.0) -> dict:
         """Return assignment {block_id: bay_id}. Never raises; falls back to
         the preference-greedy assignment on any solver trouble."""
+        # F13: certificate fields describe THIS solve only -- a greedy
+        # fallback must never inherit an OPTIMAL from an earlier call.
+        self.last_status = "greedy"
+        self.last_z2 = self.last_z3 = self.last_theta = None
         greedy = self._greedy()
         if not _HAS_CPSAT:
             return greedy

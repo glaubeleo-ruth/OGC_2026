@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import math
 
-from . import bounds, conductor, emit
+from . import bounds, conductor, emit, objective
 from .assignment import AssignmentMaster
 from .budget import Deadline
 from .incumbent import IncumbentStore
@@ -112,18 +112,30 @@ def cut_loop(inst: Instance, deadline: Deadline, store: IncumbentStore,
     iter_cost = first_iter_cost
     # First-solve bound = the instance's assignment-layer LB: once the
     # audited incumbent reaches it there is nothing left to search for.
+    # Certificate honesty (rex F11/F12): both stops carry floor_slack = w2
+    # (the master minimizes UNfloored z2, so any "reached" claim is exact
+    # only to within one floor granule), and master_bound_closed further
+    # requires that no evaluated-but-tardy proposal still has an
+    # assignment-layer cost below the incumbent -- its no-good excluded it
+    # from the walk, but nothing proved it cannot pack to z1=0.
     assignment_lb = _master_bound(inst, master)
+    open_below = []          # (iter, layer_cost) of tardy-packed proposals
     for it in range(max_iters):
         if assignment_lb is not None \
                 and store.best_objective <= assignment_lb + 1e-6:
             info_passes.append({"pass": "lbbd", "stop": "assignment_lb_reached",
                                 "lb": assignment_lb,
-                                "best": store.best_objective})
+                                "best": store.best_objective,
+                                "floor_slack": inst.w2})
             break
         proposal = result.info.get("master_assignment")
         if not proposal:
             break                       # greedy fallback path: nothing to cut
         delayed = result.info.get("delayed_initial") or {}
+        if delayed:
+            open_below.append(
+                (it, inst.w2 * objective.z2_imbalance(inst, proposal)
+                 + inst.w3 * objective.z3_preference(inst, proposal)))
         n_cuts = derive_cuts(inst, master, proposal, delayed,
                              deadline, reserve) if delayed else 0
         master.add_evaluated_nogood(proposal)
@@ -159,12 +171,28 @@ def cut_loop(inst: Instance, deadline: Deadline, store: IncumbentStore,
             "feasible": res.get("feasible"),
         })
         # With cuts + no-goods the master bound only rises; once it clears
-        # the incumbent, no unevaluated assignment can win -- stop.
+        # the incumbent AND no tardy-evaluated proposal is still open below
+        # it (F11), nothing evaluated or unevaluated can win -- stop.
         cur_bound = _master_bound(inst, master)
         if cur_bound is not None and cur_bound >= store.best_objective - 1e-6:
-            info_passes.append({"pass": "lbbd", "stop": "master_bound_closed",
+            still_open = [(i, c) for i, c in open_below
+                          if c < store.best_objective - 1e-6]
+            if not still_open:
+                info_passes.append({"pass": "lbbd",
+                                    "stop": "master_bound_closed",
+                                    "bound": cur_bound,
+                                    "best": store.best_objective,
+                                    "floor_slack": inst.w2})
+                break
+            # Honest partial certificate: optimum is boxed but not closed.
+            info_passes.append({"pass": "lbbd",
+                                "stop": "bound_closed_with_open_candidates",
                                 "bound": cur_bound,
-                                "best": store.best_objective})
+                                "best": store.best_objective,
+                                "open_below_best": len(still_open),
+                                "open_min_layer_cost": min(c for _, c
+                                                           in still_open),
+                                "floor_slack": inst.w2})
             break
         # Adaptive per-iteration cost: last measured wall, 1.3x safety.
         iter_cost = 1.3 * (deadline.elapsed() - t0)
