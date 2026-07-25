@@ -1,0 +1,9 @@
+instance,legacy_feasible,legacy_obj,legacy_wall,new_feasible,new_obj,new_wall,delta,delta_pct,winner
+1,True,20045.0,51.31,True,59681.0,0.57,39636.0,197.74,legacy
+2,True,6620.0,51.19,True,3690.0,0.47,-2930.0,-44.26,new
+3,True,75980.0,51.22,True,599057.0,3.25,523077.0,688.44,legacy
+4,True,81600.0,51.19,True,125536.0,1.79,43936.0,53.84,legacy
+5,True,74487.0,51.09,True,1300788.0,3.55,1226301.0,1646.33,legacy
+10,True,91224.0,51.32,True,1125667.0,2.03,1034443.0,1133.96,legacy
+14,True,167807.0,52.05,True,2271262.0,8.39,2103455.0,1253.5,legacy
+40,True,5186325.0,53.8,False,-1,65.01,,,legacy (new infeasible/timeout)
