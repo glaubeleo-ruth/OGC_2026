@@ -33,7 +33,8 @@ if _BASE not in sys.path:
     sys.path.insert(0, _BASE)
 import utils  # official oracle -- never modified, never re-implemented
 
-from . import conductor, emit, repair
+from . import conductor, emit, lbbd, repair
+from .assignment import AssignmentMaster
 from .budget import Deadline
 from .incumbent import IncumbentStore
 from .model import Instance
@@ -106,13 +107,20 @@ def solve(prob_info: dict, timelimit: float = 60) -> tuple[dict, dict]:
     master_cap = min(8.0, 0.15 * max(0.0, deadline.remaining()))
     expected = 1.2 * t_pack1 + master_cap + audit_reserve + 2.0
     if deadline.remaining() > expected:
+        # The master outlives the full pass: lbbd.cut_loop keeps feeding it
+        # cuts and re-solving while budget remains (F8/F9/F10).
+        master = AssignmentMaster(inst)
+        full = None
         try:
+            t0 = time.monotonic()
             full = conductor.run(inst, deadline, use_master=True,
                                  use_rescue=True, use_repair=True,
                                  compute_bounds=True,
                                  reserve=audit_reserve,
                                  master_cap=master_cap,
-                                 abort_on_expire=True)
+                                 abort_on_expire=True,
+                                 master=master)
+            t_full = time.monotonic() - t0
             if full is None:
                 info["passes"].append({"pass": "full", "aborted": True})
             else:
@@ -123,6 +131,13 @@ def solve(prob_info: dict, timelimit: float = 60) -> tuple[dict, dict]:
                                        "feasible": res.get("feasible")})
         except Exception as exc:
             info["passes"].append({"pass": "full", "error": repr(exc)})
+        if full is not None:
+            try:
+                lbbd.cut_loop(inst, deadline, store, master, full,
+                              info["passes"], reserve=audit_reserve,
+                              first_iter_cost=1.3 * t_full + audit_reserve)
+            except Exception as exc:
+                info["passes"].append({"pass": "lbbd", "error": repr(exc)})
     else:
         info["passes"].append({"pass": "full", "skipped":
                                f"budget {deadline.remaining():.1f}s < "

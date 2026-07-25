@@ -55,7 +55,8 @@ def run(inst: Instance, deadline: Deadline,
         compute_bounds: bool = True,
         reserve: float = 0.0,
         master_cap: float = 8.0,
-        abort_on_expire: bool = False) -> PipelineResult | None:
+        abort_on_expire: bool = False,
+        master: AssignmentMaster | None = None) -> PipelineResult | None:
     """One full pass: assignment -> per-bay packing -> repair -> scoring.
 
     `reserve` is the wall-clock the caller still needs after this pass
@@ -63,19 +64,26 @@ def run(inst: Instance, deadline: Deadline,
     its own hard stop.  `assignment` overrides the master (api's fallback
     seed pass; later, k-best pool exploration).  With abort_on_expire, a
     budget death during packing returns None instead of a rushed completion
-    (callers keep their audited incumbent).
+    (callers keep their audited incumbent).  A caller-owned `master` carries
+    LBBD cuts across passes (lbbd.py's loop); without one a fresh cutless
+    master is built per call.
     """
     info: dict = {}
 
     if assignment is None:
         if use_master:
-            master = AssignmentMaster(inst)
+            if master is None:
+                master = AssignmentMaster(inst)
             assignment = master.solve(deadline, time_cap=master_cap)
             info["master"] = "cpsat" if _HAS_CPSAT else "greedy"
             # O1/O6: certification status + the assignment-layer optimum the
             # packed solution should be polished toward.
             info["master_status"] = master.last_status
             info["master_z2z3"] = (master.last_z2, master.last_z3)
+            info["master_theta"] = master.last_theta
+            # The proposal itself: lbbd.py derives cuts against these sets
+            # (post-repair placements may differ).
+            info["master_assignment"] = dict(assignment)
         else:
             assignment = AssignmentMaster(inst)._greedy()
             info["master"] = "greedy"

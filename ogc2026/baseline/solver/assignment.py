@@ -14,14 +14,21 @@ and u_j are scaled to milli-units (u_j is rational), which prices Z2 to
 via objective.py before it can become an incumbent, so the scaling can never
 mis-rank an accepted solution (III.1).
 
-Cut interface (v0 stores them; the conductor's LBBD loop replays them on
-re-solve):
+Cut interface (applied on every re-solve; lbbd.py streams them in):
   * add_conflict_cut(bay, block_ids): oracle refuted this set jointly in the
     bay -> sum_{i in S} y_ij <= |S| - 1.  Only sound if the refutation came
     from the exact tiers (III.1), not from a raster-only failure.
-  * add_tardiness_cut(bay, block_ids, lb): theta_j >= lb when S subset of bay j
-    (v0 applies the simpler unconditional form theta_j >= lb for the exact
-    assignment S_j it was derived from, via a no-good on change).
+  * add_tardiness_cut(bay, block_ids, lb): theta_bay >= lb whenever all of S
+    sits in bay, in the linear no-good-on-change form
+        theta_bay >= lb * (sum_{i in S} y_i,bay - |S| + 1).
+    Sound iff lb is a certified LB for S in that bay (bounds.py CP-SAT bound;
+    tardiness in a bay is monotone in its block set, so a subset's LB is
+    valid while the subset stays together).  theta_j enters the objective at
+    weight w1 so the master prices proven-unavoidable tardiness.
+  * add_evaluated_nogood(assignment): excludes one already-packed-and-audited
+    assignment (sum of its y literals <= n-1).  Sound as k-best enumeration:
+    it only removes evaluated points, never an unevaluated candidate, so the
+    master walks the next-best Z2/Z3 assignment each LBBD iteration.
 
 Fallback (no ortools): greedy argmax-preference over compatible bays --
 correct, never optimal, and clearly reported in the result info.
@@ -66,17 +73,22 @@ class AssignmentMaster:
     rho: float = 1.0
     conflict_cuts: list = field(default_factory=list)
     tardiness_cuts: list = field(default_factory=list)
+    evaluated_nogoods: list = field(default_factory=list)   # assignment dicts
     # Filled by the last solve (O1/O6 reporting): certification status and the
     # assignment-layer optimum components the pipeline should be chasing.
     last_status: str = "none"
     last_z2: float | None = None
     last_z3: float | None = None
+    last_theta: float | None = None
 
     def add_conflict_cut(self, bay: int, block_ids) -> None:
         self.conflict_cuts.append(ConflictCut(bay, tuple(sorted(block_ids))))
 
     def add_tardiness_cut(self, bay: int, block_ids, lb: int) -> None:
         self.tardiness_cuts.append(TardinessCut(bay, tuple(sorted(block_ids)), lb))
+
+    def add_evaluated_nogood(self, assignment: dict) -> None:
+        self.evaluated_nogoods.append(dict(assignment))
 
     # ------------------------------------------------------------------ solve
     def solve(self, deadline: Deadline, time_cap: float = 10.0) -> dict:
@@ -160,8 +172,28 @@ class AssignmentMaster:
             if len(lits) == len(cut.block_ids):
                 model.Add(sum(lits) <= len(lits) - 1)
 
-        # w2*Z2 + w3*Z3, both in milli-units so the ratio stays exact.
-        model.Minimize(round(self.inst.w2) * z2
+        # theta_j: certified-unavoidable tardiness of bay j, priced at w1.
+        # Domain cap = the largest LB any stored cut could force (theta is
+        # minimized, so it sits at the forced maximum of its active cuts).
+        theta_cap = max((c.lb for c in self.tardiness_cuts), default=0)
+        theta = [model.NewIntVar(0, theta_cap, f"th_{j}") for j in range(m)]
+        for cut in self.tardiness_cuts:
+            lits = [y[i, cut.bay] for i in cut.block_ids if (i, cut.bay) in y]
+            if len(lits) == len(cut.block_ids):
+                # theta >= lb when all of S in the bay; weakens linearly (and
+                # below 0, i.e. inactive) as members leave.
+                model.Add(theta[cut.bay]
+                          >= cut.lb * (sum(lits) - len(lits) + 1))
+
+        # k-best enumeration: exclude assignments already packed and audited.
+        for prev in self.evaluated_nogoods:
+            lits = [y[i, j] for i, j in prev.items() if (i, j) in y]
+            if lits:
+                model.Add(sum(lits) <= len(lits) - 1)
+
+        # w1*theta + w2*Z2 + w3*Z3, all in micro-units so ratios stay exact.
+        model.Minimize(round(self.inst.w1 * _U_SCALE) * sum(theta)
+                       + round(self.inst.w2) * z2
                        + round(self.inst.w3 * _U_SCALE) * pref_pen)
 
         solver = cp_model.CpSolver()
@@ -175,6 +207,7 @@ class AssignmentMaster:
                 (b.pref_max - b.prefs[j]) * solver.Value(y[b.id, j])
                 for b in inst.blocks for j in range(m) if (b.id, j) in y
             ))
+            self.last_theta = float(sum(solver.Value(t) for t in theta))
         if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             # Most likely the fluid capacity over-constrained an overloaded
             # instance: retry once without it.
@@ -182,7 +215,8 @@ class AssignmentMaster:
                 self.rho = float("inf")
                 relaxed = AssignmentMaster(self.inst, rho=float("inf"),
                                            conflict_cuts=self.conflict_cuts,
-                                           tardiness_cuts=self.tardiness_cuts)
+                                           tardiness_cuts=self.tardiness_cuts,
+                                           evaluated_nogoods=self.evaluated_nogoods)
                 # Rebuild without capacity by making rho huge.
                 return relaxed._solve_cpsat_no_cap(budget)
             return None
