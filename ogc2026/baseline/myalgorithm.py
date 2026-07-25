@@ -21,8 +21,71 @@
 # incumbent, and the last resort is the solver's best-effort construction
 # rather than an empty dict whenever one exists.
 
+import multiprocessing
 import os
+import signal
 import time
+
+
+def _fork_context():
+    try:
+        if "fork" in multiprocessing.get_all_start_methods():
+            return multiprocessing.get_context("fork")
+    except Exception:
+        pass
+    return None
+
+
+def _run_legacy_hard_walled(prob_info, child_tl, hard_wall):
+    """Run legacy_entry.algorithm in a forked child that leads its own
+    process group, and SIGKILL the whole group at `hard_wall` seconds.
+
+    Why: the legacy pipeline's seed construction is not preemptible -- on
+    dense instances a single pass can need ~40s no matter how small its
+    grant is (eva panel: prob_38 walls 66.6/75.5s at timelimit 60 = server
+    -1), and no static instance statistic separates that class (prob_38 and
+    prob_40 share n=250; one fits, one blows).  A hedge line must never be
+    able to sink the entry, so the parent holds a kill switch.  setsid()
+    makes the child a group leader, so the kill also reaps the pool
+    grandchildren the legacy line spawns.  Returns a solution dict or None
+    (a killed child simply forfeits the hedge; the solver result stands).
+    No fork context (non-Linux/mac) -> caller skips the legacy line.
+    """
+    ctx = _fork_context()
+    if ctx is None:
+        return None
+    recv, send = ctx.Pipe(duplex=False)
+
+    def _target(conn, pi, tl):
+        os.setsid()
+        try:
+            import legacy_entry
+            conn.send(legacy_entry.algorithm(pi, tl))
+        except Exception:
+            try:
+                conn.send(None)
+            except Exception:
+                pass
+
+    proc = ctx.Process(target=_target, args=(send, prob_info, child_tl))
+    proc.start()
+    send.close()
+    result = None
+    try:
+        if recv.poll(hard_wall):
+            result = recv.recv()
+    except Exception:
+        result = None
+    finally:
+        recv.close()
+        proc.join(timeout=0.5)
+        if proc.is_alive():
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except Exception:
+                proc.kill()
+            proc.join(timeout=2.0)
+    return result
 
 
 def algorithm(prob_info, timelimit=60):
@@ -46,13 +109,17 @@ def algorithm(prob_info, timelimit=60):
     except Exception:
         pass
 
-    # -- Line 2: legacy ALNS portfolio on the remaining wall ---------------
+    # -- Line 2: legacy ALNS portfolio on the remaining wall, hard-walled --
+    # The child gets a discounted internal timelimit (so it normally
+    # finishes on its own) inside a hard kill wall at what actually
+    # remains minus the parent's audit reserve.
     try:
         import utils
-        remaining = timelimit - (time.monotonic() - t0) - 2.0  # audit reserve
-        if remaining > 5.0:
-            import legacy_entry
-            leg = legacy_entry.algorithm(prob_info, remaining)
+        raw_left = timelimit - (time.monotonic() - t0)
+        hard_wall = raw_left - 1.5
+        legacy_tl = hard_wall * 0.85
+        if legacy_tl > 5.0:
+            leg = _run_legacy_hard_walled(prob_info, legacy_tl, hard_wall)
             if leg is not None and leg.get("operations") is not None:
                 chk = utils.check_feasibility(prob_info, leg)
                 if chk.get("feasible") and chk.get("objective") is not None \
