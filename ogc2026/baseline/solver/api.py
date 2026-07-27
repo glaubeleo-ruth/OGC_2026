@@ -33,21 +33,68 @@ if _BASE not in sys.path:
     sys.path.insert(0, _BASE)
 import utils  # official oracle -- never modified, never re-implemented
 
-from . import conductor, emit, lbbd, repair
+from . import conductor, congestion, emit, lbbd, repair
 from .assignment import AssignmentMaster
 from .budget import Deadline
 from .incumbent import IncumbentStore
 from .model import Instance
 
+# ---------------------------------------------------------------- F17 arm ---
+# Selectable assignment arm for the F17 A/B (COMMAND_MANUAL section 2).
+#   "baseline"   -- the LBBD assignment master decides the full pass (HEAD).
+#   "congestion" -- congestion.congestion_assignment decides the full pass;
+#                   the LBBD loop then continues from it (its cuts are
+#                   certified LBs and its no-good is an evaluated point, so
+#                   both stay sound under either arm).
+# Default is "baseline" and the default code path is unchanged; the arm is
+# chosen by solve(assign_arm=...) or the OGC_ASSIGN_ARM environment variable.
+_ARMS = ("baseline", "congestion")
 
-def solve(prob_info: dict, timelimit: float = 60) -> tuple[dict, dict]:
-    """Full pipeline; returns (solution, info). Used by tests/benchmarks."""
+
+def _resolve_arm(assign_arm: str | None) -> str:
+    """Never raises, never surprises: anything unrecognised is "baseline"."""
+    try:
+        arm = assign_arm if assign_arm is not None \
+            else os.environ.get("OGC_ASSIGN_ARM", "baseline")
+        arm = str(arm).strip().lower()
+        return arm if arm in _ARMS else "baseline"
+    except Exception:
+        return "baseline"
+
+
+def solve(prob_info: dict, timelimit: float = 60,
+          assign_arm: str | None = None) -> tuple[dict, dict]:
+    """Full pipeline; returns (solution, info). Used by tests/benchmarks.
+
+    `assign_arm` selects the F17 assignment arm ("baseline" | "congestion");
+    None falls back to $OGC_ASSIGN_ARM, then to "baseline".
+    """
+    arm = _resolve_arm(assign_arm)
     deadline = Deadline.from_timelimit(timelimit)
     store = IncumbentStore(prob_info, utils)
-    info: dict = {"passes": []}
+    info: dict = {"passes": [], "assign_arm": arm}
     last_construction: dict = {"operations": {}}
 
     inst = Instance.from_prob_info(prob_info)
+
+    # F17 arm: one congestion assignment is computed up front and used by BOTH
+    # non-master assignment sources (the seed pass and the full pass).  It has
+    # to cover the seed too, or the arm is a no-op on exactly the instances
+    # that motivated it: on the mass tail the full pass is often skipped for
+    # budget (prob_31 @60s: "budget 4.9s < expected 11.4s") and the shipped
+    # answer is the seed + repair.  Cost is pure arithmetic (~0.02 s at 200
+    # blocks), so the -1 containment story of pass 1 is unchanged: same oracle,
+    # same audit, same reserve.  Under "baseline" this stays None and every
+    # call site below takes the untouched HEAD path.
+    arm_assignment = None
+    if arm == "congestion":
+        try:
+            arm_assignment, arm_info = congestion.congestion_assignment(
+                inst, deadline, reserve=0.35 * deadline.budget)
+            info["arm_info"] = arm_info
+        except Exception as exc:           # never raise: degrade to baseline
+            arm_assignment = None
+            info["arm_info"] = {"arm": "congestion", "error": repr(exc)}
 
     # -- Pass 1: seed (greedy assignment, raster-only oracle) -----------------
     # Cheap and audited first: the -1 containment story never depends on the
@@ -58,7 +105,8 @@ def solve(prob_info: dict, timelimit: float = 60) -> tuple[dict, dict]:
     seed = None
     try:
         t0 = time.monotonic()
-        seed = conductor.run(inst, deadline, use_master=False,
+        seed = conductor.run(inst, deadline, assignment=arm_assignment,
+                             use_master=False,
                              use_rescue=False, use_repair=False,
                              compute_bounds=False,
                              reserve=0.35 * deadline.budget)
@@ -113,13 +161,26 @@ def solve(prob_info: dict, timelimit: float = 60) -> tuple[dict, dict]:
         full = None
         try:
             t0 = time.monotonic()
-            full = conductor.run(inst, deadline, use_master=True,
-                                 use_rescue=True, use_repair=True,
-                                 compute_bounds=True,
-                                 reserve=audit_reserve,
-                                 master_cap=master_cap,
-                                 abort_on_expire=True,
-                                 master=master)
+            if arm_assignment is not None:
+                # F17 arm: the congestion-aware greedy decides the full pass.
+                # The master object is still built (the cut loop below needs
+                # it) but is NOT solved here, so its certificate fields stay
+                # at their "none" defaults -- a greedy assignment can never be
+                # reported as OPTIMAL (F13).
+                full = conductor.run(inst, deadline, assignment=arm_assignment,
+                                     use_rescue=True, use_repair=True,
+                                     compute_bounds=True,
+                                     reserve=audit_reserve,
+                                     abort_on_expire=True,
+                                     master=master)
+            else:
+                full = conductor.run(inst, deadline, use_master=True,
+                                     use_rescue=True, use_repair=True,
+                                     compute_bounds=True,
+                                     reserve=audit_reserve,
+                                     master_cap=master_cap,
+                                     abort_on_expire=True,
+                                     master=master)
             t_full = time.monotonic() - t0
             if full is None:
                 info["passes"].append({"pass": "full", "aborted": True})

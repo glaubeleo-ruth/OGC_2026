@@ -87,6 +87,13 @@ def run(inst: Instance, deadline: Deadline,
         else:
             assignment = AssignmentMaster(inst)._greedy()
             info["master"] = "greedy"
+    else:
+        # Caller-supplied assignment (the F17 congestion arm).  F13: no master
+        # ran on this pass, so no master_* certificate field is published --
+        # the packed proposal goes out under a neutral key that lbbd.py can
+        # still derive certified cuts and an evaluated no-good against.
+        info["assignment_source"] = "external"
+        info["proposed_assignment"] = dict(assignment)
 
     # ORACLE ladder step: per-bay packing (fork-pool extension point, T4/T8).
     by_bay_ids: dict = {bay.id: [] for bay in inst.bays}

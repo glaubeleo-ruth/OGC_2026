@@ -128,7 +128,13 @@ def cut_loop(inst: Instance, deadline: Deadline, store: IncumbentStore,
                                 "best": store.best_objective,
                                 "floor_slack": inst.w2})
             break
-        proposal = result.info.get("master_assignment")
+        # The assignment that was packed this iteration: the master's, or a
+        # caller-supplied one (F17 congestion arm).  Both are sound to cut
+        # against -- theta cuts are certified LBs from bounds.py regardless of
+        # who proposed the set, and the no-good only excludes this evaluated
+        # point.
+        proposal = (result.info.get("master_assignment")
+                    or result.info.get("proposed_assignment"))
         if not proposal:
             break                       # greedy fallback path: nothing to cut
         delayed = result.info.get("delayed_initial") or {}
