@@ -206,4 +206,48 @@ B2 INFEASIBLE on p27 (0.00 s) and p38 (0.23 s). In the shipped path INFEASIBLE t
 
 ---
 
+## D1 (deferred, run 2026-07-28) — boxing the fluid optimum: does K2 upgrade?
+
+**Instrument note (the ask conflated two of part A's instruments).** Part A's `Σ plan_T` is **not** the list scheduler: it is the `ObjectiveValue` (incumbent) of the *same* per-bay per-layer cumulative CP-SAT whose `BestObjectiveBound` gives `LB_T` — p38's 584 = 566 (mass bay @8w/120s) + 18 + 0. The "fluid Σ T, best of 5 orders" list scheduler is a separate, weaker instrument in part A's assignment-counterfactual table (p38 master = 1150). Both are reported. Floors reused from §5(c), not re-run. Setting held constant A-vs-B: 8 workers / 120 s (60 s for the one prob_27 top-up).
+
+**Instrument validation: the list scheduler reproduces part A's `fluid Σ T (master)` column EXACTLY, 3/3** — p38 1150, p27 626, p31 648.
+
+### Per (instance, partition)
+
+| instance | partition | Σ LB_T (floor) | plan_T (cumulative UB) | **box [LB, plan]** | list-sched UB |
+|---|---|---|---|---|---|
+| **prob_38** | **A** | **396** (18/378/0) | **635** | **[396, 635]** | 1150 |
+| **prob_38** | **B** | 82 (36/26/20) | **180** (44/79/57) | **[82, 180]** | 348 |
+| **prob_27** | **A** | **210** (200/10) | **383** | **[210, 383]** | 626 |
+| **prob_27** | **B** | 63 (39/24) | **154** (126/28) | **[63, 154]** | 254 |
+| prob_31 | A | not measured @8w | — | — | 648 |
+| prob_31 | B | not measured @8w | — | — | 159 |
+
+### Verdicts
+
+- **prob_38 — D1 CONFIRMS K2 (proved).** Boxes **disjoint**: B's true fluid optimum ≤ **180**, A's ≥ **396** — the optimum itself is lower by ≥ 216 block-days (≥ 2.2×). The weak list instrument agrees independently (B 348 < A's LB 396), so the conclusion does not rest on the CP-SAT UB.
+- **prob_27 — D1 CONFIRMS K2 (proved).** Disjoint: B ≤ **154** < A ≥ **210**. The list instrument alone would NOT have settled this row (overlap [210, 254]); the cumulative plan_T was required.
+- **prob_31 — INCONCLUSIVE, as pre-registered.** A's 8-worker floor never measured. List UBs (648 → 159, −75.5 %) suggestive only. HYPOTHESIS, not a result.
+
+### Effect on the pass
+
+**§5(c)'s caveat is discharged on both rows it covered:** "B's true minimum tardiness is lower" is now **established on prob_38 and prob_27 by disjoint [LB, plan] boxes; still open on prob_31.** K2's no-fire verdict upgrades from suggestive to proved on the concentration class. **D2 (prob_31 floors @8w) is the only remaining gap** in the K2 chain.
+
+### Pre-registration scored (registered before any B-partition UB was seen)
+
+PD1-1 HIT (B p38 plan 180, inside the 100–300 band) · PD1-2 CONFIRMED (disjoint) · PD1-3 CONFIRMED (154 < 210) · PD1-4 CONFIRMED 3/3 · PD1-5 CONFIRMED (p31 inconclusive, as flagged). **5/5.**
+
+### Two caveats that travel with these numbers
+
+1. **B's prob_38 partition is not unique.** The 30 s diagnostic solve is cap-truncated and not deterministic: two runs gave 38/113/99 (floor 92) and 42/114/94 (floor 82, plan 180). Both boxes sit far below A's, so the verdict is robust — but no single prob_38 B partition should be quoted as "the" answer. At the pipeline's **real 4 s/8 s caps** B's prob_38 answer WAS bit-deterministic across 3 reps; shipped behaviour is stable, the 30 s diagnostic cap is what wobbles.
+2. **A's prob_38 plan_T reads 635 here vs part A's 584.** Both valid UBs from truncated non-deterministic 8-worker runs. No verdict depends on it (all verdicts use A's LB, which reproduced part A exactly).
+
+### Unchanged by D1
+
+This bounds the **fluid per-layer-area relaxation** only. Against prob_38's realised obj1 ≈ 5 100 tardy days, A's fluid optimum is ≤ 635 and B's ≤ 180 — **D1 confirms B wins the assignment-layer argument while leaving ~4 500 realised tardy days unexplained by area at all.** That residual remains the F18/F32-Case-A shape-tiling share (§10.1, HYPOTHESIS); no window charge can see it. Task 1.6, not 1.2, is the lever there.
+
+**D1 files:** `scratch_rex/mergegate/mg_d1.py`, `mg_d1b.py`, `d1_live.txt`, `JOURNAL.md`, `PREREG.md` (D1 section).
+
+---
+
 *Persisted verbatim by the architect session on rex's behalf, 2026-07-28 KST. Task 1.2 gate: PASSES; implementation is ◆-gated on findings -1/-2/-3 as conditions.*
