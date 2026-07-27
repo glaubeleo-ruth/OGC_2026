@@ -33,9 +33,28 @@ from solver.model import Instance
 from solver.occupancy import BayOccupancy
 
 
+def _train_dir() -> Path:
+    """Locate the train/ directory by walking up from this file.
+
+    Finding 20260727c-5: this was `parents[3]`, which the baseline/ ->
+    baseline/sub/ migration silently broke (one level deeper), so the
+    documented `python -m solver._parity_test` invocation died with
+    FileNotFoundError -- a soundness gate that looked wired up and was not.
+    Walking up until a directory containing train/ appears survives the
+    next move too.  Raises with an explicit message if it cannot be found,
+    so a future breakage is loud rather than silent.
+    """
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        cand = parent / "train"
+        if cand.is_dir():
+            return cand
+    raise FileNotFoundError(
+        f"no train/ directory above {here}; pass an explicit prob_path")
+
+
 def run(n_trials: int = 5000, prob_path: str | None = None, seed: int = 0) -> bool:
-    root = Path(__file__).resolve().parents[3]
-    path = Path(prob_path) if prob_path else root / "train" / "prob_1.json"
+    path = Path(prob_path) if prob_path else _train_dir() / "prob_1.json"
     prob = json.loads(path.read_text())
     inst = Instance.from_prob_info(prob)
     rng = random.Random(seed)
