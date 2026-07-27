@@ -66,6 +66,22 @@
 #      cost is linear in n^2/n_bays, M1), floored by any real measurement
 #      taken during this run.
 #
+# -- Post-kill gate repair, 2026-07-27c (finding 20260727c-1) ------------
+# The 0.6 s kill-drain margin was being charged TWICE on the solver-dead +
+# hedge-killed path: once (correctly) inside `tail_reserve` BEFORE the hedge
+# launches, reserving wall for a drain that has not happened yet, and then
+# again inside the clause-(2) gate AFTER the kill has already been paid and
+# the child reaped -- where no second drain can occur.  rex forced the path
+# at full scale (4/4 deterministic on prob_38): the rung asked for
+# 2 x 0.2083 + 0.6 = 1.0167 s with 0.978 s left after a measured 0.522 s
+# drain, so it skipped a construction it could afford several times over
+# and returned {"operations": {}} -- a certain -1 -- on 6/40 train
+# instances (n^2/n_bays in [18.9k, 52.2k]: prob_17/18/19/37/38/39).
+# The post-kill gate now charges only what is still owed: the serial build,
+# one audit, and a final return slack.  Reserve-sizing constants and
+# gate-sizing constants are separate objects (20260727c-2) because they
+# calibrate in opposite directions; see the constant block below.
+#
 # WATCHDOG rules served by the timing changes here: *safety factor* +
 # *deadline threading*.  The tail reserve is max(1.5 s, 3 x estimated audit
 # + kill-drain margin): three audit-equivalents cover the worst tail
@@ -113,15 +129,45 @@ _RANK_AUDIT_ERROR = 2      # audit attempted but the checker raised: as F20
 # so it is the one shipped.
 _AUDIT_COST_COEFF_S = 1.0e-5
 
+# -- RESERVE-sizing constants (calibrate UPWARD) -------------------------
+# These size wall we set aside for work that has NOT happened yet.  Being
+# too generous costs objective quality; being too thin costs a -1, so they
+# round up.
+
 # Headroom kept free on both sides of any tail audit.  Provenance: rex M2
 # measured the real _run_legacy_hard_walled kill-drain overshooting its own
 # hard wall by +0.510 / +0.508 / +0.525 / +0.537 s (SIGKILL reaps promptly;
 # the theoretical 2.5 s join chain is never realised).  0.6 s covers the
-# worst measurement with slack.
+# worst measurement with slack.  RESERVE ONLY (plus the pre-kill audit gate,
+# where the drain is still a future cost): never charge it after the drain
+# has been paid -- that double-billing was 20260727c-1.
 _KILL_DRAIN_MARGIN_S = 0.6
 
 # Tail-reserve floor, unchanged from commit 1a02fb2.
 _RESERVE_FLOOR_S = 1.5
+
+# -- GATE-sizing constants (calibrate DOWNWARD) --------------------------
+# 20260727c-2: one constant cannot be conservative in both roles.  A gate
+# decides whether a rung is still attemptable; refusing the terminal rung
+# means returning {"operations": {}}, which is a certain -1, so an
+# over-charged gate is strictly worse than a mildly optimistic one.  These
+# are therefore separate objects from the reserve constants above and are
+# deliberately small.
+
+# Serial-build cost, expressed in audit-equivalents.  Provenance: rex M6
+# measured the terminal rung's build AND audit together at <= 0.169 s on
+# 12/12 instances (every n=250/300 train instance included), i.e. the build
+# alone came in under one audit-equivalent everywhere it was measured;
+# charging a whole one is the conservative rounding of that measurement.
+_RUNG_BUILD_EQUIV = 1.0
+
+# Final-return slack held back by the post-kill gate: it covers handing the
+# audited dict back to the harness once the build and the audit are paid.
+# No drain remains at that point (the hedge child is already reaped), so
+# this residue is all the gate must protect.  Fixed floor, not fitted to
+# any instance; the conservatism lives in _RUNG_BUILD_EQUIV, which over-
+# charges the measured build+audit by ~2.5x on every band instance.
+_RUNG_RETURN_SLACK_S = 0.05
 
 
 def _fork_context():
@@ -393,22 +439,44 @@ def algorithm(prob_info, timelimit=60):
         return timelimit - (time.monotonic() - t0)
 
     def _affordable(n_audits):
-        """True when n_audits parent audits still fit with margin left."""
+        """PRE-KILL audit gate: n_audits parent audits still fit, and the
+        kill-drain the hedge may still cost us is still covered.  The drain
+        is a FUTURE cost on this side of the hedge, so charging it here is
+        correct; 20260727c-1 is about charging it a SECOND time after it
+        has already been paid (see _rung_affordable)."""
         return _remaining() > n_audits * est_audit + _KILL_DRAIN_MARGIN_S
 
-    def _offer(sol):
+    def _rung_affordable(n_audits):
+        """POST-KILL gate for the clause-(2) terminal rung (20260727c-1).
+
+        Only ever evaluated after _run_legacy_hard_walled has returned --
+        i.e. the SIGKILL drain has already been deducted from _remaining()
+        and the child (with its process group) is reaped, so no second
+        drain can occur and the drain margin must not be billed again.
+        What is genuinely still owed is n_audits audit-equivalents (the
+        serial build and/or its audit) plus the final return slack.
+        """
+        return _remaining() > n_audits * est_audit + _RUNG_RETURN_SLACK_S
+
+    def _offer(sol, audit_gate=None):
         """Push one candidate through the ladder.  Audits it whenever the
         measured cost of an audit fits in what is left (clause 2: the audit
         is what the reserve is for); promotes it to best_sol on a pass,
         otherwise files it as the clause-(3)/(4) fallback at the rank its
-        audit STATUS earns."""
+        audit STATUS earns.
+
+        `audit_gate` overrides which gate decides that the audit fits; the
+        post-kill terminal rung passes _rung_affordable, because on that
+        path the drain the default gate charges has already been paid
+        (20260727c-1).  Everything else uses the pre-kill gate."""
         nonlocal best_sol, best_obj, fallback, fallback_rank, est_audit
         if not isinstance(sol, dict) or not sol.get("operations"):
             return
+        gate = _affordable if audit_gate is None else audit_gate
         # F19: gate on the estimated cost of the audit, not on a constant.
         # The old `_remaining() > 1.0` refused audits costing 0.03-0.22 s
         # and the kill-drain lands the entry inside that window by design.
-        if _affordable(1):
+        if gate(1):
             status, obj, dt = _audit(prob_info, sol)
             est_audit = max(est_audit, dt)   # measurement floors the model
             if status == _AUDIT_FEASIBLE:
@@ -462,14 +530,20 @@ def algorithm(prob_info, timelimit=60):
     # -- Clause (2): parent-side last resort (F21/F22) --------------------
     # Runs ONLY when nothing audited-feasible exists -- it never competes
     # with best_sol, it only replaces the empty-dict terminal rung on the
-    # solver-dead + hedge-killed path, which is a certain -1.  Budgeted at
-    # two audit-equivalents (build, then audit) plus margin; its result
-    # goes through the SAME tri-state audit and ranking as every other
-    # candidate, so a construction that somehow fails cannot be promoted.
+    # solver-dead + hedge-killed path, which is a certain -1.  Budgeted on
+    # the POST-KILL gate (20260727c-1): the build (_RUNG_BUILD_EQUIV audit-
+    # equivalents) plus the one audit that must follow it plus the return
+    # slack -- and NOT the kill-drain margin, which this path has already
+    # paid.  keep_going and the rung's own audit use the same gate at one
+    # audit-equivalent, so the build is abandoned exactly when the audit
+    # that has to follow it stops fitting.  Its result goes through the
+    # SAME tri-state audit and ranking as every other candidate, so a
+    # construction that somehow fails cannot be promoted.
     try:
-        if best_sol is None and _affordable(2):
-            _offer(_serial_construction(prob_info,
-                                        keep_going=lambda: _affordable(1)))
+        if best_sol is None and _rung_affordable(_RUNG_BUILD_EQUIV + 1.0):
+            _offer(_serial_construction(
+                prob_info, keep_going=lambda: _rung_affordable(1)),
+                audit_gate=_rung_affordable)
     except Exception:
         pass
 
