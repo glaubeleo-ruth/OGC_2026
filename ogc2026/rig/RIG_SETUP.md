@@ -53,6 +53,22 @@ What it does, in order:
 
 Overrides: `CORES=0-3 T=60 SPOT_T=300 SPOTS="21 31 38 40"` as env vars.
 
+## 3b. Forced-kill wall measurement (one extra run, high value)
+
+The entry's failure path (solver dead + hedge SIGKILLed) is DESIGNED to run to
+~0.985× the raw timelimit and has never been measured on server-like hardware
+(finding 20260727c-6). The natural gauntlet never enters it. Capture it once:
+
+```bash
+cd ogc2026/baseline/sub
+PYTHONPATH=$PWD taskset -c 0-3 env OMP_NUM_THREADS=1 \
+  python ../../rig/forced_kill_test.py prob_38 pure raise
+```
+
+PASS = the printed FORCED line shows `"feasible": true`, `"n_ops": 500`, and
+`"overran_raw_limit": false` with wall < 60. Repeat for prob_17 if time allows.
+Include the FORCED output line(s) in what you send back.
+
 ## 4. Send back
 
 Two files: the results CSV (path printed at the end) and the built zip. The zip
