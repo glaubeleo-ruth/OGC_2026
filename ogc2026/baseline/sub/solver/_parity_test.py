@@ -12,7 +12,7 @@ Any violation is a soundness bug (kill criterion).  The converse direction
 (utils-feasible but raster-rejected) is *expected* -- that lost capacity is
 what rescue.py wins back -- and is reported as a rate, not a failure.
 
-Run from baseline/:  python -m solver._parity_test [N_trials] [prob_path]
+Run from baseline/sub/:  python -m solver._parity_test [N_trials] [prob_path]
 """
 
 from __future__ import annotations

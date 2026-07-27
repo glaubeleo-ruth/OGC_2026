@@ -28,7 +28,7 @@ if [ "$SZ" -gt $((15 * 1024 * 1024)) ]; then
     echo "FAIL: zip exceeds 15 MB"; exit 1
 fi
 
-PROB="$(cd ../../train && pwd)/prob_1.json"
+PROB="$(cd ../../../train && pwd)/prob_1.json"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 unzip -q "$OUT" -d "$TMP"

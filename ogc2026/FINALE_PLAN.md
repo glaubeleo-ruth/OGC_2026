@@ -50,7 +50,7 @@ Order: O1 → (O2 + O3 together) → tuck/cluster (F2) → O4/O6/O7 riders → 4
 
 Goal: a tested pipeline from repo to accepted submission — before quality peaks.
 
-- **tom**: (1) the **chimera entry**: myalgorithm.py runs solver first, legacy with the
+- **tom**: (1) the **chimera entry** (`baseline/sub/myalgorithm.py`): runs solver first, legacy with the
   remaining budget, returns best verified per instance — dominates both lines under
   R − nb at near-zero risk; (2) `make_submission.sh`: builds the zip (entry + both
   pipelines, no tests/results/tester), unzips to a clean temp dir, smoke-runs prob_1

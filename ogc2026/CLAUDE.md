@@ -7,10 +7,11 @@ or crash = -1**, so feasibility always outranks objective quality.
 
 ## Repo layout
 
-- `baseline/myalgorithm.py` — entry point. Thin wrapper: greedy seed → ALNS loop (ADR-001).
-- `baseline/baseline_greedy.py` — seed construction (Phases 1–2; Phase-3 hill-climb deliberately unused).
-- `baseline/alns/` — ALNS controller, destroy/repair operators, deadline, state, evaluation.
-- `baseline/utils.py` — official feasibility checker + geometry. **Same file used for official scoring.**
+- `baseline/sub/myalgorithm.py` — competition entry point (chimera: solver + frozen legacy hedge).
+- `baseline/sub/baseline_greedy.py` — legacy seed construction.
+- `baseline/sub/alns/` — legacy ALNS controller, destroy/repair operators, deadline, state, evaluation.
+- `baseline/sub/solver/` — clean-slate solver, repair, bounds, and optional F17 experiment arm.
+- `baseline/sub/utils.py` — official feasibility checker + geometry. **Same file used for official scoring.**
 - `alg_tester/` — GUI tester: `conda activate ogc2026 && python alg_tester_app.py`.
 - `../train/prob_1.json … prob_40.json` — training instances.
 - `../problem-statement.pdf` — full rules and submission format.
@@ -51,11 +52,11 @@ Five ordered stages: (1) assignment validity, (2) crane entry, (3) crane exit,
 ## Headless test loop (preferred over the GUI for batch work)
 
 ```bash
-cd baseline && conda run -n ogc2026 python - <<'EOF'
+cd baseline/sub && conda run -n ogc2026 python - <<'EOF'
 import json, time
 from myalgorithm import algorithm
 import utils
-prob = json.load(open("../../train/prob_1.json"))
+prob = json.load(open("../../../train/prob_1.json"))
 t0 = time.monotonic(); sol = algorithm(prob, 60); wall = time.monotonic() - t0
 res = utils.check_feasibility(prob, sol)
 print(res["feasible"], res["objective"], res["obj1"], res["obj2"], res["obj3"], f"wall={wall:.1f}s")

@@ -41,11 +41,11 @@ audited before it can be returned (hard rule 4).
 ## Running
 
 ```bash
-cd ogc2026/baseline && conda run -n ogc2026 python - <<'EOF'
+cd ogc2026/baseline/sub && conda run -n ogc2026 python - <<'EOF'
 import json, time
 from solver import algorithm
 import utils
-prob = json.load(open("../../train/prob_1.json"))
+prob = json.load(open("../../../train/prob_1.json"))
 t0 = time.monotonic(); sol = algorithm(prob, 60); wall = time.monotonic() - t0
 res = utils.check_feasibility(prob, sol)
 print(res["feasible"], res["objective"], res["obj1"], res["obj2"], res["obj3"], f"wall={wall:.1f}s")
@@ -53,7 +53,7 @@ EOF
 ```
 
 Smoke: `python -m solver._smoke_test` · Parity (milestone 1):
-`python -m solver._parity_test` (both from `baseline/`, ogc2026 env).
+`python -m solver._parity_test` (both from `baseline/sub/`, ogc2026 env).
 
 ## Next milestones (Part VIII)
 

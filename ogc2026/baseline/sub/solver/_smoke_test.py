@@ -6,7 +6,7 @@ runs solver.algorithm on prob_1 and one large instance, asserts feasibility
 via utils.check_feasibility and prints objective components, wall time, and
 the per-pass info (including Z1-vs-LB gaps when bays ended tardy).
 
-Run from baseline/:  python -m solver._smoke_test [timelimit] [prob ...]
+Run from baseline/sub/:  python -m solver._smoke_test [timelimit] [prob ...]
 """
 
 from __future__ import annotations
