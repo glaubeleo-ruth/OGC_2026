@@ -1,0 +1,11 @@
+instance,requested_arm,rep,phase,timelimit,assign_arm_resolved,arm_info_present,match
+prob_31,baseline,2,t300_spot,300.0,baseline,False,True
+prob_31,congestion,2,t300_spot,300.0,congestion,True,True
+prob_31,baseline,3,t300_spot,300.0,baseline,False,True
+prob_31,congestion,3,t300_spot,300.0,congestion,True,True
+prob_38,baseline,1,t300_spot,300.0,baseline,False,True
+prob_38,congestion,1,t300_spot,300.0,,False,
+prob_38,baseline,2,t300_spot,300.0,,False,
+prob_38,congestion,2,t300_spot,300.0,,False,
+prob_38,baseline,3,t300_spot,300.0,,False,
+prob_38,congestion,3,t300_spot,300.0,,False,
