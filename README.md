@@ -3,6 +3,8 @@
 Solution repository for the **Optimization Grand Challenge 2026** ("Pack the
 Block, Beat the Clock"), a spatial block scheduling problem from shipbuilding.
 
+![Training instance prob_1: bays, block footprints, and time windows](docs/instance_prob1.png)
+
 ## The problem
 
 A shipyard has `m` fixed rectangular bays. Each of `n` ship blocks is a 3D
@@ -35,6 +37,24 @@ preference (Z1/Z2/Z3). Full details in
 
 The entry point `myalgorithm.py` runs **two independent solver lines** and
 returns the best *verified* result per instance:
+
+```mermaid
+flowchart LR
+    I["Instance JSON<br/>bays · blocks · weights"] --> E["CHIMERA entry<br/>myalgorithm.py"]
+    E -->|"~55% of time budget"| S
+    E -->|"remaining wall-clock"| L
+    subgraph S["Clean-slate solver (solver/)"]
+        M["LBBD assignment master<br/>Z2/Z3-exact + cuts"] <--> O["Per-bay packing oracle<br/>raster occupancy engine"]
+        O --> R["Repair & rescue tiers<br/>exact polygon · CP-SAT"]
+    end
+    subgraph L["Legacy line (alns/)"]
+        A["ALNS portfolio<br/>destroy / repair operators"]
+    end
+    S --> IN["Incumbent store"]
+    L --> IN
+    IN --> G{"Audit ladder<br/>utils.check_feasibility"}
+    G -->|"best verified"| OUT["Solution<br/>ENTRY / EXIT operations"]
+```
 
 1. **Clean-slate solver** (`solver/`) — an LBBD two-level matheuristic:
    a Z2/Z3-exact assignment master with Benders-style cuts over per-bay
