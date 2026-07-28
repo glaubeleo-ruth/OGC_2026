@@ -26,11 +26,17 @@
 | **Optimality** | Proven-optimal certificates on structured instances (LBBD master bound closed); certified lower bounds elsewhere |
 | **Robustness** | Entry point engineered to **never crash, never time out, never return unverified work** — hard watchdogs, process-group kills, audited fallbacks |
 
-![Hidden-set score progression and train-set sweep](docs/results.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/results_dark.png">
+  <img src="docs/results.png" alt="Hidden-set score progression and train-set sweep" width="100%">
+</picture>
 
 ## The problem
 
-<img src="docs/instance_prob1.png" alt="Training instance prob_1: bays, block footprints, and time windows" width="100%">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/instance_prob1_dark.png">
+  <img src="docs/instance_prob1.png" alt="Training instance prob_1: bays, block footprints, and time windows" width="100%">
+</picture>
 
 A shipyard has `m` fixed rectangular bays. Each of `n` ship blocks is a 3D
 object made of stacked polygonal (possibly non-convex) layers, with a release
