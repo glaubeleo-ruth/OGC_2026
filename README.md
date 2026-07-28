@@ -20,7 +20,7 @@
 
 | | |
 |---|---|
-| **Objective reduction** | **1–2 orders of magnitude** on the official hidden evaluation set over four submission cycles (P3: 61.6M → 187K, −99.7%) |
+| **Objective reduction** | **1–2 orders of magnitude** on the official hidden evaluation set, first accepted entry → final result (P3: 61.6M → 220K, −99.6%; P6: 602M → 41.9M, −93%) |
 | **Reliability** | **100% feasibility** — zero rejected solutions across every accepted evaluation and all 40 training instances |
 | **Optimality** | Proven-optimal certificates on structured instances (LBBD master bound closed); certified lower bounds elsewhere |
 | **Robustness** | Entry point engineered to **never crash, never time out, never return unverified work** — hard watchdogs, process-group kills, audited fallbacks |
@@ -101,21 +101,26 @@ time tail. The entry point never raises and never returns `None`.
 
 Submissions are scored by the organizers on **six hidden instances (P1–P6)**,
 disjoint from the 40 published training instances. Four submissions were
-accepted; every accepted run returned a feasible solution on all six instances.
+accepted, then the standing CHIMERA entry received the official final
+evaluation. Every run returned a feasible solution on all six instances.
 Best score per instance in **bold**:
 
 | Submission | Date (UTC) | P1 | P2 | P3 | P4 | P5 | P6 |
 |---|---|---:|---:|---:|---:|---:|---:|
 | #2 — first accepted | Jul 21 | 280,494 | 62,696 | 61,634,834 | 36,957,614 | 220,176,080 | 601,627,045 |
 | #4 | Jul 23 | 26,150 | 37,748 | 515,798 | 11,570,444 | 34,867,084 | 57,616,192 |
-| #5 — frozen hedge | Jul 24 | **11,280** | **31,368** | **186,910** | **8,462,228** | 20,226,241 | **52,808,786** |
-| #6 — CHIMERA (standing) | Jul 25 | **11,280** | 32,068 | 376,241 | 10,854,126 | **18,630,178** | 52,828,500 |
+| #5 — frozen hedge | Jul 24 | **11,280** | **31,368** | **186,910** | **8,462,228** | 20,226,241 | 52,808,786 |
+| #6 — CHIMERA | Jul 25 | **11,280** | 32,068 | 376,241 | 10,854,126 | **18,630,178** | 52,828,500 |
+| **Final** — CHIMERA, official evaluation | Jul 29 | **11,280** | 32,068 | 220,494 | 9,289,080 | 18,663,403 | **41,948,328** |
 
-From the first accepted submission to the best score: **−96% (P1), −50% (P2),
-−99.7% (P3), −77% (P4), −92% (P5), −91% (P6)**. The per-instance winners split
-between the last two entries — the frozen hedge leads on four instances, the
-CHIMERA entry improved a fifth — exactly the trade-off the two-line
-architecture was designed to navigate.
+From the first accepted submission to the final result: **−96% (P1), −49%
+(P2), −99.6% (P3), −75% (P4), −92% (P5), −93% (P6)**. The final evaluation of
+the same CHIMERA zip came in materially better than its Jul 25 evaluation on
+P3/P4/P6 (−41%/−14%/−21%) — consistent with the run-to-run timing
+nondeterminism documented on overloaded instances. Across all evaluations the
+per-instance bests still split between the two lines — the frozen hedge on
+P2/P3/P4, CHIMERA on P5/P6 — exactly the trade-off the two-line architecture
+was designed to navigate.
 
 ### Train-set benchmark (40 instances, 60 s limit)
 
