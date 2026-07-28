@@ -1,10 +1,9 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/banner_dark.png">
+  <img src="docs/banner.png" alt="The Grand Shipyard Puzzle — Optimization Grand Challenge 2026, Team SANDLE. A hybrid exact/metaheuristic solver for spatial block scheduling in shipyard bays.">
+</picture>
+
 <div align="center">
-
-# The Grand Shipyard Puzzle
-### Optimization Grand Challenge 2026 — Team SANDLE
-
-*A hybrid exact/metaheuristic solver for spatial block scheduling in shipyard bays:*
-*irregular 3D polygonal packing × machine scheduling, under a hard 60-second budget.*
 
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![OR-Tools](https://img.shields.io/badge/OR--Tools-CP--SAT-4285F4?logo=google&logoColor=white)
