@@ -30,8 +30,8 @@ preference (Z1/Z2/Z3). Full details in
 | `ogc2026/baseline/` | Working copies of the algorithm during development (`sub/`, `SANDLE/`, `solver/`, `alns/`) |
 | `ogc2026/alg_tester/` | Official algorithm tester app (PyQt UI) |
 | `ogc2026/rig/` | Linux benchmark rig: full-train "gauntlet" runs and forced-kill tests |
-| `train/` | 40 official training instances (`prob_1.json` … `prob_40.json`) |
-| `past/` | Materials from the 2024/2025 editions |
+| `train/` | 40 official training instances (`prob_1.json` … `prob_40.json`) — local-only, not in this repo |
+| `past/` | Materials from the 2024/2025 editions — local-only, not in this repo |
 
 ## Solution approach — "CHIMERA"
 

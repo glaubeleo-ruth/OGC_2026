@@ -7,3 +7,7 @@ submission_*.zip
 *.lic
 .env
 .ipynb_checkpoints/
+
+# local-only data (removed from GitHub)
+train/
+past/
