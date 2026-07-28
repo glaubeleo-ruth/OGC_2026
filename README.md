@@ -97,6 +97,21 @@ time tail. The entry point never raises and never returns `None`.
 
 ## Results
 
+### The output, animated
+
+<div align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/schedule_prob1_dark.gif">
+  <img src="docs/schedule_prob1.gif" alt="Animated day-by-day playback of the solver's certified-optimal schedule for training instance prob_1: blocks entering and leaving two bays over 52 days" width="640">
+</picture>
+</div>
+
+The solver's **certified-optimal schedule** for training instance prob_1
+(objective 1,499), played back day by day: 100 irregular blocks flow through
+two bays over 52 days — entering at their assigned position and orientation
+(orange on their entry day), coexisting without overlap, and exiting when
+processed. Regenerate with [`docs/make_schedule_gif.py`](docs/make_schedule_gif.py).
+
 ### Official hidden-set evaluations
 
 Submissions are scored by the organizers on **six hidden instances (P1–P6)**,
