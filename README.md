@@ -73,6 +73,52 @@ audited feasible incumbent is always preferred, with a last-resort audited
 serial construction built inside a reserved time tail. The algorithm never
 raises and never returns `None`.
 
+## Results
+
+![Hidden-set score progression and train-set sweep](docs/results.png)
+
+### Official hidden-set evaluations
+
+Submissions are scored by the organizers on **six hidden instances (P1–P6)**,
+disjoint from the 40 published training instances. Four submissions were
+accepted; every accepted run returned a feasible solution on all six instances
+(zero `−1` in the lineage). Best score per instance in **bold**:
+
+| Submission | Date (UTC) | P1 | P2 | P3 | P4 | P5 | P6 |
+|---|---|---:|---:|---:|---:|---:|---:|
+| #2 — first accepted | Jul 21 | 280,494 | 62,696 | 61,634,834 | 36,957,614 | 220,176,080 | 601,627,045 |
+| #4 | Jul 23 | 26,150 | 37,748 | 515,798 | 11,570,444 | 34,867,084 | 57,616,192 |
+| #5 — frozen hedge | Jul 24 | **11,280** | **31,368** | **186,910** | **8,462,228** | 20,226,241 | **52,808,786** |
+| #6 — CHIMERA (standing) | Jul 25 | **11,280** | 32,068 | 376,241 | 10,854,126 | **18,630,178** | 52,828,500 |
+
+From the first accepted submission to the best score, the objective fell by
+**~96% on P1, ~50% on P2, ~99.7% on P3, ~77% on P4, ~92% on P5, and ~91% on
+P6** — one to two orders of magnitude on four of the six instances. The
+per-instance winners split between the last two entries: the frozen
+submission #5 still leads on P2/P3/P4/P6, while the CHIMERA entry improved
+P5 — precisely the hedging trade-off the two-line architecture was built
+around.
+
+### Train-set benchmark (40 instances, 60 s time limit)
+
+The clean-slate solver's v0 → v0.4 (LBBD cut loop) progression on the full
+training set, measured under the standing protocol (one subprocess per
+instance, hard external timeout, verdict by `utils.check_feasibility` only):
+
+- **40/40 feasible, zero `−1`** — v0's hard timeouts on prob_38/40 are gone;
+  worst wall-clock 52.03 s against the 54.8 s internal budget.
+- vs v0: **36 instances improved, 2 fixed from infeasible, 2 exact ties,
+  0 regressions**; median improvement on changed instances ≈ **−80%**.
+- **prob_4 solved to proven optimality** (`master_bound_closed`), and
+  prob_1/2/8 stop at a certified assignment-layer optimum in under 3 s.
+- Easy tier (prob_1–8) reaches zero tardiness everywhere; the overloaded
+  tail (prob_21–40) is dominated by repair and run-to-run timing variance
+  (single-rep rows are indicative, not reproducible).
+
+Full stamped lab reports — per-run CSVs, provenance caveats, submit-safety
+panels, and A/B audits — live in
+[`ogc2026/baseline/results/`](ogc2026/baseline/results/).
+
 ## Setup
 
 ```bash
