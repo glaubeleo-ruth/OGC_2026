@@ -1,5 +1,7 @@
 # OGC 2026 — The Grand Shipyard Puzzle
 
+**Team SANDLE** · Python 3.12 · OR-Tools CP-SAT · Gurobi · Xpress
+
 Solution repository for the **Optimization Grand Challenge 2026** ("Pack the
 Block, Beat the Clock"), a spatial block scheduling problem from shipbuilding.
 
