@@ -53,6 +53,17 @@ preference (Z3) — so every placement decision couples a hard geometric packing
 problem with a scheduling problem. One instance, one process, **60 seconds**.
 Full formal statement: [`ogc2026/problem-statement.pdf`](ogc2026/problem-statement.pdf).
 
+**In plain terms:** imagine Tetris, except the pieces are ship sections the
+size of buildings, they're irregular polygons rather than squares, each one
+arrives on its own date and must leave by a deadline — and pieces you place
+today take up floor space for days, blocking tomorrow's arrivals. Choosing
+*where* a block sits and *when* it enters are one decision, not two:
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/concepts_block_dark.png">
+  <img src="docs/concepts_block.png" alt="Anatomy of a block: stacked polygonal layers, shown with its eight allowed orientations" width="100%">
+</picture>
+
 ## Solution architecture — "CHIMERA"
 
 Two independently engineered solver lines run inside one time budget; the best
@@ -94,6 +105,36 @@ feasibility checker *in the parent process, on the exact dict being returned*.
 A verified incumbent always outranks an unverified one; if the ladder is empty,
 a last-resort feasible construction is built and audited inside a reserved
 time tail. The entry point never raises and never returns `None`.
+
+### The two engines, in plain terms
+
+**ALNS** (adaptive large neighborhood search) improves a schedule the way you'd
+rearrange a full closet: take a few things out, put everything back more
+cleverly, keep the result if it's better — thousands of times a minute, with
+the "adaptive" part learning *which* removal and reinsertion moves are paying
+off on this particular instance:
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/concepts_alns_dark.png">
+  <img src="docs/concepts_alns.png" alt="ALNS illustrated in three panels: a current schedule with two late blocks, a destroy step removing some placements, and a repair step reinserting everything so all blocks fit" width="100%">
+</picture>
+
+**LBBD** (logic-based Benders decomposition) splits the problem between a
+planner and a foreman. The planner solves the easy half exactly — *who goes to
+which bay, and when* — ignoring geometry. The foreman then tries to physically
+pack each bay's blocks. When a plan doesn't fit, the foreman reports back
+*why*, as a new constraint the planner can never violate again. Each round the
+plan gets more realistic, and when a plan packs and matches the planner's
+bound, the solution is **provably optimal** — no better schedule exists:
+
+```mermaid
+flowchart LR
+    M["Assignment master — the planner<br/><i>solves bay assignment + timing exactly,<br/>geometry ignored</i>"]
+    O["Packing oracle — the foreman<br/><i>tries to physically place each bay's<br/>blocks, day by day</i>"]
+    M -->|"proposed plan"| O
+    O -->|"doesn't fit: here's a constraint<br/>ruling that plan out (a cut)"| M
+    O -->|"fits, and matches the<br/>planner's bound"| C["Certified schedule<br/>provably optimal"]
+```
 
 ## Results
 
@@ -181,6 +222,33 @@ polygon packing, raster occupancy engines) · bound certification.
 **Engineering:** hard real-time budget governance · subprocess isolation and
 watchdogs · reproducible benchmarking · failure-mode hunting · risk-hedged
 release management.
+
+## Glossary
+
+<details>
+<summary><b>Every term in this README, in one line each</b> (click to expand)</summary>
+<br>
+
+| Term | Plain meaning |
+|---|---|
+| **Block scheduling** | Deciding where and when each ship section occupies shared factory floor space — packing and calendar planning as one problem. |
+| **Feasible solution** | A schedule that breaks no rules: no overlaps, no block placed before its release date, everything inside its bay. |
+| **Objective** | The score being minimized: lateness penalties + uneven workload + ignoring bay preferences. Lower is better. |
+| **Tardiness** | How many days a block finishes past its due date. |
+| **Heuristic** | A method that finds good solutions fast without guaranteeing the best one. |
+| **Metaheuristic** | A general strategy (like ALNS) for steering heuristics out of dead ends. |
+| **ALNS** | Adaptive large neighborhood search — repeatedly remove part of a solution and rebuild it better, learning which moves work. |
+| **MIP** | Mixed-integer programming — exact optimization over yes/no decisions, solved here by Gurobi. |
+| **CP-SAT** | Google's constraint-programming solver; used here to repair small conflict clusters exactly. |
+| **LBBD** | Logic-based Benders decomposition — a planner solves the abstract problem exactly, a foreman checks physical reality, and each failure becomes a permanent constraint (*cut*). |
+| **Matheuristic** | A hybrid that embeds exact methods (MIP/CP) inside a heuristic search — the design of this solver. |
+| **Incumbent** | The best verified solution found so far; the one you'd submit if time ran out now. |
+| **Lower bound** | A proven "no solution can score better than X." When the incumbent hits it, optimality is certified. |
+| **Certificate** | Proof that a solution is optimal (bound met) — not just "we couldn't find better." |
+| **Feasibility audit** | Re-checking every candidate with the official checker before trusting it — the solver's word is never enough. |
+| **Hidden set** | The six secret instances (P1–P6) the organizers score submissions on — disjoint from the 40 published training instances. |
+
+</details>
 
 ## Repository guide
 
